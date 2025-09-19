@@ -1,1 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Cheesy Order — Welcome</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="center">
+    <div class="slideshow">
+      <div class="slide active">Cheesy Order</div>
+      <div class="slide">Fresh Burrata</div>
+      <div class="slide">Koubkarak Delights</div>
+    </div>
 
+    <div class="buttons">
+      <button id="adminBtn" class="primary">Admin</button>
+      <button id="userBtn" class="secondary">User</button>
+    </div>
+
+    <p class="hint">Admin default login: <strong>Cheesyorder</strong> / <strong>Chessy$2023</strong></p>
+  </main>
+
+  <script>
+    // simple slideshow
+    const slides = document.querySelectorAll('.slide');
+    let idx = 0;
+    setInterval(() => {
+      slides[idx].classList.remove('active');
+      idx = (idx + 1) % slides.length;
+      slides[idx].classList.add('active');
+    }, 2500);
+
+    document.getElementById('adminBtn').addEventListener('click', () => {
+      location.href = 'admin-login.html';
+    });
+    document.getElementById('userBtn').addEventListener('click', () => {
+      location.href = 'user-login.html';
+    });
+  </script>
+</body>
+</html>

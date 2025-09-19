@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>User Dashboard — Cheesy</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button id="logout" class="secondary">Logout</button>
+    <button id="back" class="secondary">Back</button>
+  </header>
+
+  <main class="container">
+    <h1 id="welcome">User Dashboard</h1>
+
+    <section class="card">
+      <h3>Create Order</h3>
+      <label>Branch:
+        <select id="branchSel"></select>
+      </label>
+      <label>Date: <input id="orderDate" type="date"/></label>
+      <div id="orderLines"></div>
+      <button id="addLine" class="primary">Add Line</button>
+      <div class="row">
+        <button id="submitOrder" class="primary">Submit Order</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Received Orders (Admin sent to you)</h3>
+      <div id="receivedList"></div>
+    </section>
+
+    <section class="card">
+      <h3>Past Orders (Last 1 month)</h3>
+      <label>Month:
+        <input type="month" id="pastMonth"/>
+      </label>
+      <div id="pastList"></div>
+    </section>
+  </main>
+
+<script>
+  // helpers
+  function load(k){ return JSON.parse(localStorage.getItem(k) || '[]'); }
+  function save(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+  function uid(prefix='id'){ return prefix + Date.now() + Math.floor(Math.random()*1000); }
+
+  const current = JSON.parse(localStorage.getItem('cheesy_current_user') || 'null');
+  if(!current){ alert('No logged in user'); location.href='user-login.html'; }
+  document.getElementById('welcome').textContent = `Welcome, ${current.username} (${current.branch})`;
+  document.getElementById('back').addEventListener('click', ()=> location.href='index.html');
+  document.getElementById('logout').addEventListener('click', ()=> {
+    localStorage.removeItem('cheesy_current_user'); location.href='index.html';
+  });
+
+  const items = load('cheesy_items');
+  const branches = load('cheesy_branches');
+
+  // populate branch select: show branches added by admin; but user should choose branch assigned to them
+  const branchSel = document.getElementById('branchSel');
+  // allow only their branch OR all branches if user has no branch
+  if(current.branch){
+    branchSel.innerHTML = `<option>${current.branch}</option>`;
+    branchSel.disabled = true;
+  } else {
+    branchSel.innerHTML = branches.map(b=>`<option>${b}</option>`).join('');
+  }
+
+  // date default to today
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('orderDate').value = today;
+
+  // order lines editing
+  function renderLines(lines){
+    const container = document.getElementById('orderLines');
+    container.innerHTML = '';
+    lines.forEach((ln, idx) => {
+      const div = document.createElement('div');
+      div.className = 'line';
+      div.innerHTML = `
+        <select class="selItem">${items.map(it=>`<option value="${it.id}" ${it.name === ln.name ? 'selected' : ''}>${it.name}</option>`)}</select>
+        <input class="qty" type="number" min="0" value="${ln.qty}" />
+        <input class="unit" readonly value="${ln.unit}" />
+        <button class="del small">Delete</button>
+      `;
+      container.appendChild(div);
+      const sel = div.querySelector('.selItem');
+      const unit = div.querySelector('.unit');
+      sel.addEventListener('change', ()=> {
+        const picked = items.find(i=>i.id === sel.value);
+        unit.value = picked.unit;
+      });
+      div.querySelector('.del').addEventListener('click', ()=> {
+        lines.splice(idx,1); renderLines(lines);
+      });
+    });
+  }
+
+  let currentLines = [{ name: items[0].name, id: items[0].id, qty:1, unit:items[0].unit }];
+  renderLines(currentLines);
+
+  document.getElementById('addLine').addEventListener('click', ()=>{
+    const it = items[0];
+    currentLines.push({ name: it.name, id: it.id, qty:1, unit:it.unit });
+    renderLines(currentLines);
+  });
+
+  // enforce one order per user per date
+  document.getElementById('submitOrder').addEventListener('click', ()=>{
+    const date = document.getElementById('orderDate').value;
+    if(!date) return alert('Choose date');
+    const orders = load('cheesy_orders');
+    const existing = orders.find(o => o.user === current.username && o.date === date);
+    if (existing) return alert('You already made an order for this date. One order per date only.');
+    const branch = document.getElementById('branchSel').value;
+    const lines = Array.from(document.querySelectorAll('#orderLines .line')).map(r => {
+      const id = r.querySelector('.selItem').value;
+      const itemObj = items.find(i=>i.id === id);
+      return { id: itemObj.id, name: itemObj.name, qty: +r.querySelector('.qty').value || 0, unit: itemObj.unit };
+    }).filter(x=>x.qty>0);
+    if(lines.length === 0) return alert('Add at least one item with qty > 0');
+    const order = {
+      id: uid('o'),
+      user: current.username,
+      branch,
+      date,
+      items: lines,
+      status: 'draft' // admin must resend to mark sent
+    };
+    orders.push(order);
+    save('cheesy_orders', orders);
+    alert('Order submitted as draft. Admin can edit and resend to you.');
+    // clear lines
+    currentLines = [{ name: items[0].name, id: items[0].id, qty:1, unit:items[0].unit }];
+    renderLines(currentLines);
+    loadReceived(); loadPast();
+  });
+
+  // Received orders (status 'sent') awaiting confirmation
+  function loadReceived(){
+    const orders = load('cheesy_orders').filter(o => o.user === current.username && o.status === 'sent');
+    const container = document.getElementById('receivedList');
+    if(orders.length === 0) { container.innerHTML = '<p>No received orders.</p>'; return; }
+    container.innerHTML = '';
+    orders.forEach(o => {
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.innerHTML = `<strong>${o.date} — ${o.branch}</strong>
+        <p>${o.items.map(it => `${it.name} — ${it.qty} ${it.unit}`).join('<br>')}</p>
+        <div class="row small">
+          <button class="confirm" data-id="${o.id}">Confirm Received</button>
+        </div>`;
+      container.appendChild(div);
+    });
+    container.querySelectorAll('.confirm').forEach(b => {
+      b.addEventListener('click', e => {
+        if(!confirm('Confirm you received this order?')) return;
+        const id = e.target.dataset.id;
+        const ordersAll = load('cheesy_orders');
+        const ord = ordersAll.find(x=>x.id===id);
+        ord.status = 'received';
+        save('cheesy_orders', ordersAll);
+        alert('Confirmed. Admin will see this in past orders.');
+        loadReceived(); loadPast();
+      });
+    });
+  }
+  loadReceived();
+
+  // Past orders last 1 month (or selected month)
+  function loadPast(){
+    const mInput = document.getElementById('pastMonth').value;
+    const ordersAll = load('cheesy_orders').filter(o => o.user === current.username && (o.status === 'received' || o.status === 'draft' || o.status === 'sent'));
+    let filtered = ordersAll;
+    if(mInput){
+      const [y,m] = mInput.split('-');
+      filtered = ordersAll.filter(o => {
+        const od = new Date(o.date);
+        return od.getFullYear() === +y && (od.getMonth()+1) === +m;
+      });
+    } else {
+      // default last 1 month window: from today-30days to today inclusive
+      const now = new Date();
+      const past = new Date(); past.setDate(now.getDate() - 30);
+      filtered = ordersAll.filter(o => {
+        const od = new Date(o.date);
+        return od >= past && od <= now;
+      });
+    }
+    const container = document.getElementById('pastList');
+    if(filtered.length === 0) { container.innerHTML = '<p>No past orders in this period.</p>'; return; }
+    container.innerHTML = '';
+    filtered.forEach(o=>{
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.innerHTML = `<strong>${o.date} — ${o.branch}</strong>
+        <p>${o.items.map(it => `${it.name} — ${it.qty} ${it.unit}`).join('<br>')}</p>
+        <p>Status: <em>${o.status}</em></p>`;
+      container.appendChild(div);
+    });
+  }
+
+  document.getElementById('pastMonth').addEventListener('change', loadPast);
+  // initial show
+  document.getElementById('pastMonth').value = ''; // keep default last 1 month
+  loadPast();
+
+  // reflect items updates dynamically in page (if admin changed list in another tab)
+  window.addEventListener('storage', (e)=>{
+    if(e.key === 'cheesy_items') {
+      const newItems = load('cheesy_items');
+      // update select options on lines
+      // naive approach: reload page to pick up changes
+      location.reload();
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Admin Login — Cheesy</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="container">
+    <h1>Admin Login</h1>
+    <form id="adminLoginForm" class="card">
+      <label>Username<input id="adminUser" required value="Cheesyorder"></label>
+      <label>Password<input id="adminPass" type="password" required value="Chessy$2023"></label>
+      <div class="row">
+        <button type="submit" class="primary">Login</button>
+        <button type="button" id="backBtn" class="secondary">Back</button>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    // basic admin login
+    document.getElementById('backBtn').addEventListener('click', () => location.href = 'index.html');
+
+    document.getElementById('adminLoginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const u = document.getElementById('adminUser').value.trim();
+      const p = document.getElementById('adminPass').value;
+      if (u === 'Cheesyorder' && p === 'Chessy$2023') {
+        location.href = 'admin-dashboard.html';
+      } else {
+        alert('Wrong admin credentials.');
+      }
+    });
+
+    // initialize localStorage defaults if not present
+    (function initDefaults(){
+      if (!localStorage.getItem('cheesy_branches')) {
+        const defaultBranches = ['Cheesy','Burrata','Koubkarak'];
+        localStorage.setItem('cheesy_branches', JSON.stringify(defaultBranches));
+      }
+      if (!localStorage.getItem('cheesy_items')) {
+        // default items (admin can edit later)
+        const defaultItems = [
+          { id: 'i1', name: 'Mozzarella 1kg', unit: 'kg' },
+          { id: 'i2', name: 'Sliced Cheddar 200g', unit: 'pack' }
+        ];
+        localStorage.setItem('cheesy_items', JSON.stringify(defaultItems));
+      }
+      if (!localStorage.getItem('cheesy_users')) {
+        // no users by default except admin
+        localStorage.setItem('cheesy_users', JSON.stringify([]));
+      }
+      if (!localStorage.getItem('cheesy_orders')) {
+        localStorage.setItem('cheesy_orders', JSON.stringify([]));
+      }
+    })();
+  </script>
+</body>
+</html>

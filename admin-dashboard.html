@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Admin Dashboard — Cheesy</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <h2>Admin — Cheesy</h2>
+    <nav>
+      <button id="manageBranchesBtn">Manage Branches</button>
+      <button id="manageItemsBtn">Manage Items</button>
+      <button id="manageUsersBtn">Manage Users</button>
+      <button id="seeOrdersBtn">See Orders</button>
+      <button id="reportsBtn">Reports / Print</button>
+      <button id="logoutBtn">Logout</button>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <div id="panel"></div>
+    <div class="row bottom">
+      <button id="backToIndex" class="secondary">Back</button>
+    </div>
+  </main>
+
+<script>
+  // utilities
+  function uid(prefix='id') { return prefix + Date.now() + Math.floor(Math.random()*1000); }
+  function save(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+  function load(key){ return JSON.parse(localStorage.getItem(key) || '[]'); }
+
+  // panels rendering
+  const panel = document.getElementById('panel');
+
+  document.getElementById('backToIndex').addEventListener('click', ()=> location.href='index.html');
+  document.getElementById('logoutBtn').addEventListener('click', ()=> {
+    if(confirm('Logout admin?')) location.href='index.html';
+  });
+
+  document.getElementById('manageBranchesBtn').addEventListener('click', renderBranches);
+  document.getElementById('manageItemsBtn').addEventListener('click', renderItems);
+  document.getElementById('manageUsersBtn').addEventListener('click', renderUsers);
+  document.getElementById('seeOrdersBtn').addEventListener('click', renderOrdersView);
+  document.getElementById('reportsBtn').addEventListener('click', renderReports);
+
+  // default open orders
+  renderOrdersView();
+
+  // Branches
+  function renderBranches(){
+    const branches = load('cheesy_branches');
+    panel.innerHTML = `<h3>Branches</h3>
+      <div class="card">
+        <input id="newBranch" placeholder="Branch name (e.g. Cheesy)"/>
+        <button id="addBranch" class="primary">Add Branch</button>
+      </div>
+      <ul id="branchList" class="list"></ul>`;
+
+    const list = document.getElementById('branchList');
+    branches.forEach((b, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${b}</span>
+        <button data-i="${i}" class="delete small">Delete</button>`;
+      list.appendChild(li);
+    });
+
+    document.getElementById('addBranch').addEventListener('click', ()=>{
+      const v = document.getElementById('newBranch').value.trim();
+      if(!v) return alert('Enter branch name');
+      branches.push(v);
+      save('cheesy_branches', branches);
+      renderBranches();
+    });
+
+    list.querySelectorAll('.delete').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const idx = +e.target.dataset.i;
+        if(!confirm('Delete branch? This will NOT remove existing orders but users may be orphaned.')) return;
+        branches.splice(idx,1);
+        save('cheesy_branches', branches);
+        renderBranches();
+      });
+    });
+  }
+
+  // Items (order item list that admin controls)
+  function renderItems(){
+    const items = load('cheesy_items');
+    panel.innerHTML = `<h3>Order Items (admin can add/edit/delete)</h3>
+      <div class="card">
+        <input id="itemName" placeholder="Item name"/>
+        <input id="itemUnit" placeholder="Unit (e.g. kg, pack)"/>
+        <button id="addItem" class="primary">Add Item</button>
+      </div>
+      <table id="itemsTable" class="table"><thead><tr><th>Name</th><th>Unit</th><th>Actions</th></tr></thead><tbody></tbody></table>`;
+
+    const tbody = panel.querySelector('tbody');
+    items.forEach((it, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${it.name}</td><td>${it.unit}</td>
+        <td>
+          <button class="edit small" data-i="${i}">Edit</button>
+          <button class="del small" data-i="${i}">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('addItem').addEventListener('click', ()=>{
+      const name = document.getElementById('itemName').value.trim();
+      const unit = document.getElementById('itemUnit').value.trim();
+      if(!name || !unit) return alert('Provide name and unit');
+      items.push({ id: uid('it'), name, unit });
+      save('cheesy_items', items);
+      renderItems();
+    });
+
+    tbody.querySelectorAll('.del').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const i = +e.target.dataset.i;
+        if(!confirm('Delete item?')) return;
+        items.splice(i,1); save('cheesy_items', items); renderItems();
+      });
+    });
+
+    tbody.querySelectorAll('.edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const i = +e.target.dataset.i;
+        const it = items[i];
+        const newName = prompt('Edit item name', it.name);
+        if(newName === null) return;
+        const newUnit = prompt('Edit unit', it.unit);
+        if(newUnit === null) return;
+        it.name = newName.trim(); it.unit = newUnit.trim();
+        save('cheesy_items', items); renderItems();
+      });
+    });
+  }
+
+  // Users
+  function renderUsers(){
+    const users = load('cheesy_users');
+    const branches = load('cheesy_branches');
+    panel.innerHTML = `<h3>Manage Users</h3>
+      <div class="card">
+        <input id="newUsername" placeholder="username"/>
+        <input id="newPassword" placeholder="password"/>
+        <select id="newUserBranch">${branches.map(b=>`<option>${b}</option>`).join('')}</select>
+        <button id="addUser" class="primary">Create User</button>
+      </div>
+      <table class="table"><thead><tr><th>Username</th><th>Branch</th><th>Actions</th></tr></thead>
+        <tbody id="usersT"></tbody></table>`;
+
+    const tbody = document.getElementById('usersT');
+    users.forEach((u,i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${u.username}</td><td>${u.branch || ''}</td>
+        <td>
+          <button class="del small" data-i="${i}">Delete</button>
+          <button class="edit small" data-i="${i}">Edit</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('addUser').addEventListener('click', ()=>{
+      const username = document.getElementById('newUsername').value.trim();
+      const password = document.getElementById('newPassword').value;
+      const branch = document.getElementById('newUserBranch').value;
+      if(!username || !password) return alert('Provide username and password');
+      if(users.find(x=>x.username===username)) return alert('Username exists');
+      users.push({ id: uid('u'), username, password, branch });
+      save('cheesy_users', users); renderUsers();
+    });
+
+    tbody.querySelectorAll('.del').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const i = +e.target.dataset.i;
+        if(!confirm('Delete user?')) return;
+        users.splice(i,1); save('cheesy_users', users); renderUsers();
+      });
+    });
+
+    tbody.querySelectorAll('.edit').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const i = +e.target.dataset.i;
+        const u = users[i];
+        const newUser = prompt('Edit username', u.username);
+        if(newUser === null) return;
+        const newPass = prompt('Edit password (leave blank to keep)', '');
+        const newBranch = prompt('Edit branch', u.branch || '');
+        u.username = newUser.trim();
+        if(newPass) u.password = newPass;
+        u.branch = newBranch;
+        save('cheesy_users', users); renderUsers();
+      });
+    });
+  }
+
+  // Orders view (see orders by user; admin can resend -> sets status 'sent')
+  function renderOrdersView(){
+    const orders = load('cheesy_orders');
+    const users = load('cheesy_users');
+    panel.innerHTML = `<h3>See Orders</h3>
+      <div class="card">
+        <label>Filter by user:
+          <select id="filterUser">
+            <option value="">--all users--</option>
+            ${users.map(u => `<option value="${u.username}">${u.username} (${u.branch||''})</option>`).join('')}
+          </select>
+        </label>
+        <label>Filter month:
+          <input id="filterMonth" type="month" />
+        </label>
+        <button id="applyFilters" class="primary">Apply</button>
+      </div>
+      <div id="ordersList"></div>`;
+
+    document.getElementById('applyFilters').addEventListener('click', ()=>{
+      const u = document.getElementById('filterUser').value;
+      const m = document.getElementById('filterMonth').value; // yyyy-mm
+      renderOrdersList(u, m);
+    });
+
+    renderOrdersList('', '');
+  }
+
+  function renderOrdersList(userFilter, monthFilter){
+    const orders = load('cheesy_orders');
+    const container = document.getElementById('ordersList');
+    container.innerHTML = '';
+    // group by user
+    const byUser = {};
+    orders.forEach(o => {
+      if(userFilter && o.user !== userFilter) return;
+      if(monthFilter){
+        const [y,m] = monthFilter.split('-');
+        const od = new Date(o.date);
+        if (od.getFullYear() !== +y || (od.getMonth()+1) !== +m) return;
+      }
+      byUser[o.user] = byUser[o.user] || [];
+      byUser[o.user].push(o);
+    });
+
+    if(Object.keys(byUser).length === 0) return container.innerHTML = '<p>No orders found.</p>';
+
+    Object.keys(byUser).forEach(username => {
+      const box = document.createElement('div');
+      box.className = 'card';
+      box.innerHTML = `<h4>User: ${username}</h4><ul class="list" id="u-${username}"></ul>`;
+      container.appendChild(box);
+      const ul = box.querySelector('ul');
+      byUser[username].forEach(o => {
+        const li = document.createElement('li');
+        li.innerHTML = `<div><strong>${o.date}</strong> — ${o.branch} — ${o.items.map(it=>`${it.name} (${it.qty} ${it.unit})`).join(', ')} <em>[${o.status}]</em></div>
+          <div class="row small">
+            <button class="edit" data-id="${o.id}">Edit</button>
+            <button class="resend" data-id="${o.id}">Resend to User</button>
+            <button class="delete" data-id="${o.id}">Delete</button>
+          </div>`;
+        ul.appendChild(li);
+      });
+    });
+
+    // attach actions
+    container.querySelectorAll('.delete').forEach(b=>{
+      b.addEventListener('click', e=>{
+        if(!confirm('Delete order?')) return;
+        const id = e.target.dataset.id;
+        let orders = load('cheesy_orders');
+        orders = orders.filter(x=>x.id !== id);
+        save('cheesy_orders', orders);
+        renderOrdersList(userFilter, monthFilter);
+      });
+    });
+
+    container.querySelectorAll('.resend').forEach(b=>{
+      b.addEventListener('click', e=>{
+        const id = e.target.dataset.id;
+        const orders = load('cheesy_orders');
+        const ord = orders.find(x=>x.id===id);
+        if(!ord) return;
+        ord.status = 'sent';
+        // update date to current when resend? Spec says admin can edit before resending. We'll keep date same but admin can edit in Edit.
+        save('cheesy_orders', orders);
+        alert('Order resent to user. It will appear in their Received Orders.');
+        renderOrdersList(userFilter, monthFilter);
+      });
+    });
+
+    container.querySelectorAll('.edit').forEach(b=>{
+      b.addEventListener('click', e=>{
+        const id = e.target.dataset.id;
+        editOrderAdmin(id, ()=> renderOrdersList(userFilter, monthFilter));
+      });
+    });
+  }
+
+  // edit order admin (allow editing items and quantities)
+  function editOrderAdmin(orderId, cb){
+    const orders = load('cheesy_orders');
+    const order = orders.find(o=>o.id===orderId);
+    if(!order) return alert('Order not found');
+    const items = load('cheesy_items');
+
+    // construct editor
+    panel.innerHTML = `<h3>Edit Order (admin)</h3>
+      <div class="card">
+        <label>User: <strong>${order.user}</strong></label>
+        <label>Branch: <input id="editBranch" value="${order.branch}" /></label>
+        <label>Date: <input id="editDate" type="date" value="${order.date}" /></label>
+        <div id="editItems"></div>
+        <button id="addLine" class="primary">Add Line</button>
+        <div class="row">
+          <button id="saveEdit" class="primary">Save</button>
+          <button id="cancelEdit" class="secondary">Cancel</button>
+        </div>
+      </div>`;
+
+    function renderLines(){
+      const container = document.getElementById('editItems');
+      container.innerHTML = '';
+      order.items.forEach((line, idx) => {
+        const row = document.createElement('div');
+        row.className = 'line';
+        row.innerHTML = `
+          <select class="selItem">${items.map(it=>`<option value="${it.id}" ${it.name===line.name ? 'selected' : ''}>${it.name}</option>`)}</select>
+          <input class="qty" type="number" min="0" value="${line.qty}" />
+          <input class="unit" readonly value="${line.unit}" />
+          <button class="delLine small">Delete</button>
+        `;
+        container.appendChild(row);
+
+        const sel = row.querySelector('.selItem');
+        const unitInput = row.querySelector('.unit');
+        sel.addEventListener('change', ()=> {
+          const picked = items.find(it=>it.id === sel.value);
+          unitInput.value = picked.unit;
+        });
+        row.querySelector('.delLine').addEventListener('click', ()=> {
+          order.items.splice(idx,1);
+          renderLines();
+        });
+      });
+    }
+    renderLines();
+
+    document.getElementById('addLine').addEventListener('click', ()=>{
+      const it = items[0];
+      order.items.push({ name: it.name, id: it.id, qty: 1, unit: it.unit });
+      renderLines();
+    });
+
+    document.getElementById('cancelEdit').addEventListener('click', ()=> renderOrdersView());
+
+    document.getElementById('saveEdit').addEventListener('click', ()=>{
+      // collect items
+      const rows = Array.from(document.querySelectorAll('#editItems .line'));
+      const newItems = rows.map(r => {
+        const itemId = r.querySelector('.selItem').value;
+        const itemObj = items.find(it=>it.id === itemId);
+        return { id: itemObj.id, name: itemObj.name, qty: (+r.querySelector('.qty').value || 0), unit: itemObj.unit };
+      }).filter(x=>x.qty > 0);
+      order.items = newItems;
+      order.branch = document.getElementById('editBranch').value;
+      order.date = document.getElementById('editDate').value;
+      // status remains same unless admin chooses to resend in orders view
+      save('cheesy_orders', load('cheesy_orders'));
+      alert('Order updated.');
+      if(cb) cb();
+    });
+  }
+
+  // Reports / print
+  function renderReports(){
+    panel.innerHTML = `<h3>Reports / Print Orders</h3>
+      <div class="card">
+        <label>Choose month: <input id="repMonth" type="month" /></label>
+        <button id="genReport" class="primary">Generate & Print</button>
+      </div>
+      <div id="reportArea"></div>`;
+
+    document.getElementById('genReport').addEventListener('click', ()=>{
+      const month = document.getElementById('repMonth').value;
+      if(!month) return alert('Pick a month');
+      const [y,m] = month.split('-');
+      const orders = load('cheesy_orders').filter(o => {
+        const od = new Date(o.date);
+        return od.getFullYear() === +y && (od.getMonth()+1) === +m;
+      });
+      const area = document.getElementById('reportArea');
+      if(orders.length === 0) area.innerHTML = '<p>No orders in this month.</p>';
+      else {
+        area.innerHTML = '<div id="printable"></div>';
+        const p = document.getElementById('printable');
+        p.innerHTML = `<h3>Cheesy Orders — ${month}</h3>`;
+        orders.forEach(o=>{
+          p.innerHTML += `<div class="card"><strong>${o.user} — ${o.branch} — ${o.date}</strong><p>${o.items.map(it=>`${it.name} — ${it.qty} ${it.unit}`).join('<br>')}</p></div>`;
+        });
+        // print
+        setTimeout(()=> window.print(), 300);
+      }
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>User Login — Cheesy</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="container">
+    <h1>User Login</h1>
+    <form id="userLoginForm" class="card">
+      <label>Username<input id="userUser" required></label>
+      <label>Password<input id="userPass" type="password" required></label>
+      <div class="row">
+        <button type="submit" class="primary">Login</button>
+        <button type="button" id="backBtn" class="secondary">Back</button>
+      </div>
+      <p class="hint">Admin must create users before they can login.</p>
+    </form>
+  </main>
+
+  <script>
+    document.getElementById('backBtn').addEventListener('click', () => location.href = 'index.html');
+
+    document.getElementById('userLoginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const username = document.getElementById('userUser').value.trim();
+      const pass = document.getElementById('userPass').value;
+      const users = JSON.parse(localStorage.getItem('cheesy_users') || '[]');
+      const found = users.find(u => u.username === username && u.password === pass);
+      if (!found) return alert('Invalid user credentials or user not created by admin.');
+      // store current user session
+      localStorage.setItem('cheesy_current_user', JSON.stringify(found));
+      // route to user dashboard
+      location.href = 'user-dashboard.html';
+    });
+  </script>
+</body>
+</html>
