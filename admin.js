@@ -1,3 +1,25 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Supabase connection
+const supabaseUrl = "https://supabase.com";
+const supabaseKey = "https://yrsxneflvjehttaralyz.supabase.co";
+export const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Add new order
+export async function addOrder(userId, item) {
+  const { data, error } = await supabase
+    .from("orders")
+    .insert([{ user_id: userId, item_name: item, status: "pending" }]);
+  console.log(data, error);
+}
+
+// Realtime subscription
+supabase
+  .channel("public:orders")
+  .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+    console.log("Order changed:", payload);
+  })
+  .subscribe();
 // js/admin.js
 import { db, ref, onValue, update } from "./firebase-config.js";
 
