@@ -63,3 +63,14 @@ window.confirmOrder = function (orderId) {
     status: "confirmed"
   });
 };
+import { supabase } from "./supabase.js";
+
+// Example: fetch all users
+async function loadUsers() {
+  let { data, error } = await supabase.from("users").select("*");
+  if (error) {
+    console.error("Error loading users:", error);
+  } else {
+    console.log("Users:", data);
+  }
+}
